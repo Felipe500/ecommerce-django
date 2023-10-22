@@ -1,18 +1,23 @@
 import os
+import uuid
+from PIL import Image
 
 from django.conf import settings
 from django.db import models
-from PIL import Image
+from django.utils.text import slugify
+
+from app.common.utils import ImageField
 
 
 class Product(models.Model):
-    name = models.CharField(max_length=255)
-    description_short = models.TextField(max_length=255)
-    description_long = models.TextField()
-    image = models.ImageField(upload_to='product_images/%y/%m/', blank=True, null=True)
-    slug = models.SlugField(unique=True)
-    price_marketing = models.FloatField(default=0)
-    price_marketing_promotional = models.FloatField(default=0)
+    code = models.UUIDField(editable=False, blank=True, null=True)
+    name = models.CharField(max_length=255, verbose_name='Nome')
+    description_short = models.TextField(max_length=255, verbose_name='Descrição curta')
+    description_long = models.TextField(verbose_name='Descrição longa')
+    image = ImageField(upload_to='product_images/%y/%m/', blank=True, null=True)
+    slug = models.SlugField(unique=True, blank=True, null=True)
+    price_marketing = models.FloatField(default=0, verbose_name='Preço')
+    price_marketing_promotional = models.FloatField(default=0, verbose_name='Preço Promo.')
     type = models.CharField(default='V', max_length=1, choices=(
         ('V', 'Variável'),
         ('S', 'Simples'),
@@ -24,6 +29,16 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def get_price_format(self):
+        return f'R$ {self.price_marketing:.2f}'.replace('.', ',')
+    get_price_format.fget.short_description = 'Preço'
+
+    @property
+    def get_price_promotional_format(self):
+        return f'R$ {self.price_marketing_promotional:.2f}'.replace('.', ',')
+    get_price_promotional_format.fget.short_description = 'Preço Promo.'
 
     @staticmethod
     def resize_image(img, new_width=800):
@@ -41,6 +56,10 @@ class Product(models.Model):
         img_pil.close()
 
     def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = uuid.uuid4()
+        if self.slug:
+            self.slug = f'{slugify(self.name[:20] + str(self.code)[:14])}'
         super().save(*args, **kwargs)
 
         if self.image:
