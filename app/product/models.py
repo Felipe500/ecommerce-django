@@ -7,6 +7,7 @@ from django.db import models
 from django.utils.text import slugify
 
 from app.common.utils import ImageField
+from app.common.format import format_price_
 
 
 class Product(models.Model):
@@ -32,12 +33,12 @@ class Product(models.Model):
 
     @property
     def get_price_format(self):
-        return f'R$ {self.price_marketing:.2f}'.replace('.', ',')
+        return format_price_(self.price_marketing)
     get_price_format.fget.short_description = 'Preço'
 
     @property
     def get_price_promotional_format(self):
-        return f'R$ {self.price_marketing_promotional:.2f}'.replace('.', ',')
+        return format_price_(self.price_marketing_promotional)
     get_price_promotional_format.fget.short_description = 'Preço Promo.'
 
     @staticmethod
@@ -58,7 +59,7 @@ class Product(models.Model):
     def save(self, *args, **kwargs):
         if not self.code:
             self.code = uuid.uuid4()
-        if self.slug:
+        if not self.slug:
             self.slug = f'{slugify(self.name[:20] + str(self.code)[:14])}'
         super().save(*args, **kwargs)
 
