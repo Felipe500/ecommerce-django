@@ -1,12 +1,15 @@
 from django.http import HttpResponse
+from django.contrib import messages
 
 from django.shortcuts import render, redirect, reverse, get_object_or_404
 from django.views.generic.list import ListView
 from django.views.generic.detail import DetailView
 from django.views import View
 
+from app.perfil.models import Perfil
+
 from .models import Product, VariationProduct
-from django.contrib import messages
+
 
 
 class ListProductView(ListView):
@@ -114,15 +117,73 @@ class AddToCarProductView(View):
 
 
 class RemoveToCarProductView(View):
-    pass
+    def get(self, *args, **kwargs):
+        http_referer = self.request.META.get(
+            'HTTP_REFERER',
+            reverse('product:list')
+        )
+        variacao_id = self.request.GET.get('vid')
+
+        if not variacao_id:
+            return redirect(http_referer)
+
+        if not self.request.session.get('carrinho'):
+            return redirect(http_referer)
+
+        if variacao_id not in self.request.session['carrinho']:
+            return redirect(http_referer)
+
+        carrinho = self.request.session['carrinho'][variacao_id]
+
+        messages.success(
+            self.request,
+            f'Produto {carrinho["produto_nome"]} {carrinho["variacao_nome"]} '
+            f'removido do seu carrinho.'
+        )
+
+        del self.request.session['carrinho'][variacao_id]
+        self.request.session.save()
+        return redirect(http_referer)
 
 
 class ShoppingCartView(View):
-    pass
+    def get(self, *args, **kwargs):
+        contexto = {
+            'carrinho': self.request.session.get('carrinho', {})
+        }
+
+        return render(self.request, 'product/shopping_cart.html', contexto)
 
 
 class FinishShoppingCartView(View):
     pass
 
 
+class ShoppingSummaryView(View):
+    def get(self, *args, **kwargs):
+        if not self.request.user.is_authenticated:
+            return redirect('perfil:create_perfil')
+
+        perfil = Perfil.objects.filter(user=self.request.user).exists()
+
+        if not perfil:
+            messages.error(
+                self.request,
+                'Usuário sem perfil.'
+            )
+            return redirect('perfil:criar')
+
+        if not self.request.session.get('carrinho'):
+            messages.error(
+                self.request,
+                'Carrinho vazio.'
+            )
+            return redirect('produto:lista')
+
+        contexto = {
+            'usuario': self.request.user,
+            'carrinho': self.request.session['carrinho'],
+        }
+
+        return render(self.request, 'product/shopping_summary.html', contexto)
 
