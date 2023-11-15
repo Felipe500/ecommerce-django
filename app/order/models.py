@@ -5,6 +5,7 @@ from app.common.choices import ORDER_STATUS
 
 class Order(models.Model):
     shopper = models.ForeignKey(User, on_delete=models.CASCADE)
+    qtd_total = models.PositiveIntegerField()
     total = models.FloatField()
     status = models.CharField(default=ORDER_STATUS.created, max_length=10, choices=ORDER_STATUS)
 
@@ -18,13 +19,13 @@ class Order(models.Model):
 
 class ItemOrder(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE)
-    product_name = models.CharField(max_length=255)
+    product = models.CharField(max_length=255)
     product_id = models.PositiveIntegerField()
     variation = models.CharField(max_length=255)
     variation_id = models.PositiveIntegerField()
     price = models.FloatField(default=0)
     price_promotional = models.FloatField()
-    amount = models.PositiveIntegerField()
+    quantity = models.PositiveIntegerField()
     image = models.ImageField()
 
     class Meta:

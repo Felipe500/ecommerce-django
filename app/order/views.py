@@ -1,18 +1,140 @@
 from django.http import HttpResponse
-from django.shortcuts import render
-from django.views.generic.list import ListView
+from django.shortcuts import redirect, reverse
+from django.views.generic import ListView, DetailView
 from django.views import View
+from django.contrib import messages
+
+from app.product.models import VariationProduct, Product
+from .models import Order, ItemOrder
+
+from app.common import utils
 
 
-class PayOrderView(ListView):
-    def get(self, request, *args, **kwargs):
-        return HttpResponse('s')
+class DispatchLoginRequiredMixin(View):
+    def dispatch(self, *args, **kwargs):
+        if not self.request.user.is_authenticated:
+            return redirect('perfil:create_perfil')
+
+        return super().dispatch(*args, **kwargs)
+
+    def get_queryset(self, *args, **kwargs):
+        qs = super().get_queryset(*args, **kwargs)
+        qs = qs.filter(shopper=self.request.user)
+        return qs
 
 
-class DetailOrderView(ListView):
-    pass
+class PayOrderView(DispatchLoginRequiredMixin, DetailView):
+    template_name = 'order/pay_order.html'
+    model = Order
+    pk_url_kwarg = 'pk'
+    context_object_name = 'pedido'
 
 
-class SaveOrder(ListView):
-    pass
+class DetailOrderView(DispatchLoginRequiredMixin, DetailView):
+    model = Order
+    context_object_name = 'pedido'
+    template_name = 'order/detail_order.html'
+    pk_url_kwarg = 'pk'
 
+
+class ListOrderView(DispatchLoginRequiredMixin, ListView):
+    model = Order
+    context_object_name = 'pedidos'
+    template_name = 'order/list_order.html'
+    paginate_by = 10
+    ordering = ['-id']
+
+
+class SaveOrder(View):
+    template_name = 'order/pay_order.html'
+
+    def get(self, *args, **kwargs):
+        if not self.request.user.is_authenticated:
+            messages.error(
+                self.request,
+                'Você precisa fazer login.'
+            )
+            return redirect('perfil:create_perfil')
+
+        if not self.request.session.get('carrinho'):
+            messages.error(
+                self.request,
+                'Seu carrinho está vazio.'
+            )
+            return redirect('product:list')
+
+        carrinho = self.request.session.get('carrinho')
+        carrinho_variacao_ids = [v for v in carrinho]
+        bd_variacoes = list(
+            VariationProduct.objects.select_related('product')
+            .filter(id__in=carrinho_variacao_ids)
+        )
+
+        for variacao in bd_variacoes:
+            vid = str(variacao.id)
+
+            estoque = variacao.stock
+            qtd_carrinho = carrinho[vid]['quantidade']
+            preco_unt = carrinho[vid]['preco_unitario']
+            preco_unt_promo = carrinho[vid]['preco_unitario_promocional']
+
+            error_msg_estoque = ''
+
+            if estoque < qtd_carrinho:
+                carrinho[vid]['quantidade'] = estoque
+                carrinho[vid]['preco_quantitativo'] = estoque * preco_unt
+                carrinho[vid]['preco_quantitativo_promocional'] = estoque * \
+                    preco_unt_promo
+
+                error_msg_estoque = 'Estoque insuficiente para alguns '\
+                    'produtos do seu carrinho. '\
+                    'Reduzimos a quantidade desses produtos. Por favor, '\
+                    'verifique quais produtos foram afetados a seguir.'
+
+            if error_msg_estoque:
+                messages.error(
+                    self.request,
+                    error_msg_estoque
+                )
+
+                self.request.session.save()
+                return redirect('product:shopping_car')
+
+        qtd_total_carrinho = utils.cart_total_qtd(carrinho)
+        valor_total_carrinho = utils.cart_totals(carrinho)
+
+        pedido = Order(
+            shopper=self.request.user,
+            total=valor_total_carrinho,
+            qtd_total=qtd_total_carrinho,
+            status='created',
+        )
+
+        pedido.save()
+
+        ItemOrder.objects.bulk_create(
+            [
+                ItemOrder(
+                    order=pedido,
+                    product=v['produto_nome'],
+                    product_id=v['produto_id'],
+                    variation=v['variacao_nome'],
+                    variation_id=v['variacao_id'],
+                    price=v['preco_quantitativo'],
+                    price_promotional=v['preco_quantitativo_promocional'],
+                    quantity=v['quantidade'],
+                    image=v['imagem'],
+                ) for v in carrinho.values()
+            ]
+        )
+
+        del self.request.session['carrinho']
+
+        return redirect(
+            reverse(
+                'order:pay_order',
+                kwargs={
+                    'pk': pedido.pk
+                }
+            )
+        )
