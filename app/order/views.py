@@ -1,10 +1,9 @@
-from django.http import HttpResponse
 from django.shortcuts import redirect, reverse
 from django.views.generic import ListView, DetailView
 from django.views import View
 from django.contrib import messages
 
-from app.product.models import VariationProduct, Product
+from app.product.models import VariationProduct
 from .models import Order, ItemOrder
 
 from app.common import utils
