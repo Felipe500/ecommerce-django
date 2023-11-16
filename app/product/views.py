@@ -1,5 +1,5 @@
-from django.http import HttpResponse
 from django.contrib import messages
+from django.db.models import Q
 
 from django.shortcuts import render, redirect, reverse, get_object_or_404
 from django.views.generic.list import ListView
@@ -11,12 +11,31 @@ from app.perfil.models import Perfil
 from .models import Product, VariationProduct
 
 
-
 class ListProductView(ListView):
     model = Product
     template_name = 'product/list_product.html'
     context_object_name = 'products'
     paginate_by = 10
+
+
+class SearchView(ListProductView):
+    def get_queryset(self, *args, **kwargs):
+        termo = self.request.GET.get('termo') or self.request.session['termo']
+        qs = super().get_queryset(*args, **kwargs)
+
+        if not termo:
+            return qs
+
+        self.request.session['termo'] = termo
+
+        qs = qs.filter(
+            Q(name__icontains=termo) |
+            Q(description_short__icontains=termo) |
+            Q(description_long__icontains=termo)
+        )
+
+        self.request.session.save()
+        return qs
 
 
 class DetailsProductView(DetailView):

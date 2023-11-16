@@ -11,4 +11,5 @@ urlpatterns = [
     path('shopping-cart/', views.ShoppingCartView.as_view(), name="shopping_car"),
     path('shopping-summary/', views.ShoppingSummaryView.as_view(), name="shopping_summary"),
     path('finish-shopping-cart/', views.FinishShoppingCartView.as_view(), name="finish_shopping_cart"),
+    path('search/', views.SearchView.as_view(), name="search"),
 ]
